@@ -1,0 +1,25 @@
+{
+  "manifest_version": 3,
+  "name": "课堂二维码提醒",
+  "version": "1.2.0",
+  "description": "监控指定课堂直播中的二维码，通过本地辅助程序置顶窗口并响铃。",
+  "minimum_chrome_version": "116",
+  "permissions": [
+    "storage",
+    "nativeMessaging",
+    "notifications"
+  ],
+  "optional_host_permissions": [
+    "http://*/*",
+    "https://*/*"
+  ],
+  "action": {
+    "default_title": "打开课堂二维码提醒"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'; worker-src 'self'; connect-src http: https:; media-src 'self' blob: http: https:;"
+  }
+}

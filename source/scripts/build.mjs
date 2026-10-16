@@ -1,0 +1,11 @@
+import { build } from 'esbuild';
+import { mkdir, copyFile, cp, readFile } from 'node:fs/promises';
+import { fileURLToPath } from 'node:url';
+process.chdir(fileURLToPath(new URL('../',import.meta.url)));
+const dest = new URL('../../extension/', import.meta.url);
+await mkdir(dest, { recursive: true });
+for (const file of ['manifest.json', 'player.html', 'style.css', 'notification.png']) await copyFile(new URL('../extension/'+file, import.meta.url), new URL(file, dest));
+await build({absWorkingDir:fileURLToPath(new URL('../',import.meta.url)),entryPoints:['./extension/background.ts','./extension/player.ts'], tsconfig:'tsconfig.json',bundle:true, outdir:fileURLToPath(dest), platform:'browser', target:'chrome116', format:'iife', sourcemap:false, legalComments:'eof'});
+await cp('node_modules/hls.js/LICENSE', new URL('HLS-LICENSE.txt', dest));
+await copyFile('node_modules/hls.js/dist/hls.worker.js', new URL('hls.worker.js', dest));
+console.log('Extension built:', dest.pathname);

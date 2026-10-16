@@ -1,0 +1,22 @@
+{
+  "name": "classroom-qr",
+  "version": "1.2.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "typecheck": "tsc --noEmit",
+    "test": "node --test tests/*.test.mjs"
+  },
+  "dependencies": {
+    "fflate": "0.8.3",
+    "hls.js": "1.7.3",
+    "ical.js": "2.2.1"
+  },
+  "devDependencies": {
+    "@types/chrome": "^0.1.0",
+    "esbuild": "^0.25.0",
+    "qrcode": "^1.5.4",
+    "typescript": "^5.9.0"
+  }
+}

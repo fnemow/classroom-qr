@@ -1,0 +1,24 @@
+# Build outputs and local tools
+/extension/
+/native/*.exe
+/native/*.pdb
+/native/*.wav
+/native/cn.classroom.qr_watch.json
+**/node_modules/
+**/bin/
+**/obj/
+/.qa/
+/work/
+/.playwright-cli/
+*.zip
+*.crx
+*.pem
+*.log
+.env
+.env.*
+*.ics
+*.xlsx
+classroom-qr-log-*.json
+qr-journal-export.json
+.DS_Store
+Thumbs.db
