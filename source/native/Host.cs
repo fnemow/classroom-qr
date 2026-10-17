@@ -22,7 +22,7 @@ public sealed class Host(Protocol protocol) : IAsyncDisposable
         string id=message.GetProperty("sessionId").GetString() ?? "";
         if (!Guid.TryParse(id,out _)) throw new InvalidDataException("Invalid session ID");
         string command=message.GetProperty("command").GetString() ?? "";
-        if(command=="hello") { await protocol.Send(new {sessionId=id,type="ready",version="1.2.0",qrFiltering=true,qrLogging=true}); return; }
+        if(command=="hello") { await protocol.Send(new {sessionId=id,type="ready",version="1.2.1",qrFiltering=true,qrLogging=true}); return; }
         if(command=="start")
         {
             var nextPolicy=QrPolicy.Parse(message);

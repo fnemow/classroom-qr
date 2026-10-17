@@ -9,7 +9,9 @@ namespace ClassroomQr;
 public sealed partial class StreamRelay : IAsyncDisposable
 {
     sealed record Resource(byte[] Bytes,string ContentType,Uri Location,bool Playlist);
-    sealed class Entry { public required Lazy<Task<Resource>> Value; public DateTimeOffset Expires=DateTimeOffset.MaxValue; }
+    // Monotonic deadlines: changing the system clock must not extend cache retention.
+    sealed class Entry { public required Lazy<Task<Resource>> Value; public long Expires=long.MaxValue; }
+    const int SegmentRetentionMs=10000;
     readonly TcpListener listener=new(IPAddress.Loopback,0);
     readonly CancellationTokenSource cancel=new();
     readonly HttpClient http=new(new SocketsHttpHandler {MaxConnectionsPerServer=3,AutomaticDecompression=DecompressionMethods.All}) {Timeout=TimeSpan.FromSeconds(20)};
@@ -18,13 +20,14 @@ public sealed partial class StreamRelay : IAsyncDisposable
     readonly object gate=new();
     readonly string secret=Guid.NewGuid().ToString("N");
     readonly Task accepting;
+    readonly Task cleanup;
     readonly string root;
     public string PlaybackUrl {get;}
     public StreamRelay(Uri source)
     {
         listener.Start();
         root=$"http://127.0.0.1:{((IPEndPoint)listener.LocalEndpoint).Port}/{secret}/";
-        PlaybackUrl=Local(source); accepting=Accept();
+        PlaybackUrl=Local(source); accepting=Accept(); cleanup=Cleanup();
     }
     string Local(Uri uri)
     {
@@ -51,25 +54,41 @@ public sealed partial class StreamRelay : IAsyncDisposable
         string key=uri.AbsoluteUri; Entry entry;
         lock(gate)
         {
-            if(cache.TryGetValue(key,out var cached) && cached.Expires>DateTimeOffset.UtcNow) entry=cached;
+            TrimCache();
+            if(cache.TryGetValue(key,out var cached) && cached.Expires>Environment.TickCount64) entry=cached;
             else {entry=new Entry {Value=new(()=>Download(uri))}; cache[key]=entry;}
-            // Retain at most 64 MiB / 128 completed resources, newest first.
-            long bytes=0;
-            foreach(var pair in cache.Reverse().ToArray())
-            {
-                var value=pair.Value.Value;
-                if(!value.IsValueCreated || !value.Value.IsCompletedSuccessfully) continue;
-                bytes+=value.Value.Result.Bytes.LongLength;
-                if((bytes>64*1024*1024 || cache.Count>128) && pair.Key!=key) cache.Remove(pair.Key);
-            }
         }
         try
         {
             var result=await entry.Value.Value;
-            lock(gate) if(entry.Expires==DateTimeOffset.MaxValue) entry.Expires=DateTimeOffset.UtcNow.AddMilliseconds(result.Playlist?450:60000);
+            lock(gate)
+            {
+                // Cache hits do not renew the deadline. Existing readers keep their own reference.
+                if(entry.Expires==long.MaxValue) entry.Expires=Environment.TickCount64+(result.Playlist?450:SegmentRetentionMs);
+                TrimCache();
+            }
             return result;
         }
         catch {lock(gate) {if(cache.TryGetValue(key,out var current)&&ReferenceEquals(current,entry)) cache.Remove(key);} throw;}
+    }
+    // Called under gate. In-flight downloads are shared until completion, never evicted mid-download.
+    void TrimCache()
+    {
+        long now=Environment.TickCount64, bytes=0; int completed=0;
+        foreach(var pair in cache.Reverse().ToArray())
+        {
+            if(pair.Value.Expires<=now) {cache.Remove(pair.Key);continue;}
+            var value=pair.Value.Value;
+            if(!value.IsValueCreated || !value.Value.IsCompletedSuccessfully) continue;
+            bytes+=value.Value.Result.Bytes.LongLength; completed++;
+            if(bytes>64*1024*1024 || completed>128) cache.Remove(pair.Key);
+        }
+    }
+    async Task Cleanup()
+    {
+        using var timer=new PeriodicTimer(TimeSpan.FromSeconds(1));
+        try {while(await timer.WaitForNextTickAsync(cancel.Token)) {lock(gate) TrimCache();}}
+        catch(OperationCanceledException) when(cancel.IsCancellationRequested) {}
     }
     async Task<Resource> Download(Uri uri)
     {
@@ -157,9 +176,10 @@ public sealed partial class StreamRelay : IAsyncDisposable
     [GeneratedRegex(@"^bytes=(\d+)-(\d*)$")] private static partial Regex RangeHeader();
     public async ValueTask DisposeAsync()
     {
-        cancel.Cancel();listener.Stop();await accepting;
+        cancel.Cancel();listener.Stop();await Task.WhenAll(accepting,cleanup);
         Task[] tasks;lock(gate)tasks=clients.ToArray();
         try {await Task.WhenAll(tasks);} catch {}
+        lock(gate) cache.Clear();
         http.Dispose();cancel.Dispose();
     }
 }

@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "课堂二维码提醒",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "监控指定课堂直播中的二维码，通过本地辅助程序置顶窗口并响铃。",
   "minimum_chrome_version": "116",
   "permissions": [
